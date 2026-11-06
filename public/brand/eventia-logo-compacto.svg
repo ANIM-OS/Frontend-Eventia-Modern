@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 112" width="520" height="112" role="img" aria-label="eventia"><g transform="translate(0 12) scale(0.8)">
+  <rect width="120" height="120" rx="30" fill="#0F1B3D" />
+  <path d="M32 58H88A28 28 0 1 0 79.8 77.8" stroke="#fff" stroke-width="11" fill="none" stroke-linecap="round" />
+  <circle cx="91" cy="86" r="6.5" fill="#2F6BFF" />
+</g><g transform="translate(116 6) scale(0.8)"><g stroke="#0F1B3D" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M0 70H60A30 30 0 1 0 51.2 91.2" />
+  <path d="M80 40L110 100L140 40" />
+  <path d="M160 70H220A30 30 0 1 0 211.2 91.2" />
+  <path d="M244 40V100M244 70A30 30 0 0 1 304 70V100" />
+  <path d="M348 22V82A18 18 0 0 0 366 100M330 42H368" />
+  <path d="M390 40V100" />
+  <path d="M414 70A30 30 0 1 0 474 70A30 30 0 1 0 414 70M474 40V100" />
+</g>
+<circle cx="390" cy="17" r="7" fill="#2F6BFF" /></g></svg>

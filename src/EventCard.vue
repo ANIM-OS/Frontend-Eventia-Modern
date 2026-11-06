@@ -1,0 +1,34 @@
+<script setup>
+import { computed, ref, watch } from 'vue'
+import AppIcon from './AppIcon.vue'
+import BarraAforo from './BarraAforo.vue'
+const props = defineProps({ event: { type: Object, required: true }, compact: Boolean })
+defineEmits(['select'])
+const imageFailed = ref(false)
+watch(() => props.event.imagenUrl, () => { imageFailed.value = false })
+const price = computed(() => Number(props.event.precio || 0) === 0 ? 'Gratis' : `S/ ${Number(props.event.precio).toFixed(2)}`)
+const availability = computed(() => {
+  if (props.event.finalizado) return 'Finalizado'
+  if (props.event.agotado || props.event.cuposDisponibles === 0) return 'Agotado'
+  if (props.event.cuposDisponibles > 0 && props.event.cuposDisponibles <= 20) return `Quedan ${props.event.cuposDisponibles} cupos`
+  return 'Disponible'
+})
+</script>
+
+<template>
+  <q-card flat bordered class="event-card" :class="{ 'compact-card': compact }">
+    <q-btn flat no-caps class="card-image" @click="$emit('select', event.eventoId)" :aria-label="'Ver ' + event.nombre">
+      <img v-if="event.imagenUrl && !imageFailed" :src="event.imagenUrl" :alt="event.nombre" loading="lazy" @error="imageFailed=true">
+      <div v-else class="event-image-placeholder"><AppIcon name="ticket" /><span>{{ event.categoriaNombre || 'Una nueva experiencia' }}</span></div>
+      <span class="card-category">{{ event.categoriaNombre || 'Evento' }}</span>
+    </q-btn>
+    <div class="card-content">
+      <div class="card-date"><AppIcon name="calendar" /><span>{{ new Date(event.fechaInicio).toLocaleString('es-PE', { timeZone: 'America/Lima', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }} · {{ event.distrito || event.provincia || event.sede }}</span></div>
+      <q-btn flat no-caps class="card-title" @click="$emit('select', event.eventoId)">{{ event.nombre }}</q-btn>
+      <p v-if="!compact" class="card-description">{{ event.descripcion || event.sede }}</p>
+      <!-- US-05 / US-09: aforo total y cupos, se actualizan en vivo -->
+      <BarraAforo v-if="event.aforoTotal" :aforo-total="event.aforoTotal" :vendidas="event.entradasVendidas || 0" />
+      <div class="card-footer"><div><span class="availability" :class="{ scarce: event.cuposDisponibles <= 20, unavailable: event.finalizado || event.agotado }">{{ availability }}</span><strong class="card-price">{{ price }}</strong></div><q-btn unelevated no-caps color="primary" class="primary-button card-cta" @click="$emit('select', event.eventoId)">{{ compact || event.finalizado || event.agotado ? 'Ver evento' : Number(event.precio) === 0 ? 'Inscribirme' : 'Ver entradas' }}</q-btn></div>
+    </div>
+  </q-card>
+</template>
