@@ -409,6 +409,12 @@ async function createRule() {
   await loadModTab()
 }
 async function toggleRule(rule) { const result = await action(() => api.toggleRegla(rule.reglaId, !rule.activa), `Regla ${rule.activa ? 'desactivada' : 'activada'}.`); if (result !== false) rule.activa = !rule.activa }
+async function makeAdmin(user) {
+  const answer = await ask({ title: `Nombrar administrador a ${user.nombre}`, description: `${user.email} podrá moderar eventos, suspender cuentas, crear reglas y nombrar a otros administradores. Quedará registrado en la auditoría.`, fields: [{ key: 'motivo', label: 'Motivo', required: true }], confirm: 'Nombrar administrador' })
+  if (!answer) return
+  await action(() => api.nombrarAdministrador(user.usuarioId, { motivo: answer.motivo, confirmado: true }), `${user.nombre} ahora es administrador.`)
+  await loadModTab()
+}
 async function verifyUser(user) { await action(() => api.verificarUsuario(user.usuarioId), 'Cuenta verificada.'); await loadModTab() }
 
 async function logout() { if (await canLeaveForm()) await action(() => signOut(auth), 'Sesión cerrada.') }
@@ -544,7 +550,7 @@ onUnmounted(dejarDeEscucharCupos)
 
         <NotificationsPage v-else-if="active === 'avisos'" :notifications="notifications" @mark-read="markRead" @mark-all-read="markAllRead" />
 
-        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @toggle-rule="toggleRule" />
+        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @make-admin="makeAdmin" @toggle-rule="toggleRule" />
       </main>
       <div v-if="active === 'detalle' && eventDetail" class="mobile-reservation"><div><strong>{{ Number(eventDetail.precio) === 0 ? 'Gratis' : 'S/ ' + (Number(eventDetail.precio)*detailQuantity).toFixed(2) }}</strong><small>Reserva sin cobro · demostración</small></div><button class="primary-button" :disabled="!eventDetail.disponibleParaCompra || !purchaseLimit(eventDetail)" @click="openCheckout(eventDetail,detailQuantity)">{{ eventDetail.disponibleParaCompra ? 'Reservar' : 'No disponible' }}</button></div>
       <footer class="app-footer"><span>EVENTIA · EVENTOS PARA VIVIRLOS</span><span>Hecho para encontrarnos · Perú</span></footer>
