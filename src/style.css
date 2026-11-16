@@ -1262,3 +1262,5 @@ body, .q-layout { background: #f7f7f5; color: #1c1b1b; }
   .feed-heading h2 { font-size: 22px; }
   .page-title h1 { font-size: 32px; }
 }
+
+.chat-context { display: block; color: #5b6b80; font-size: 10px; line-height: 1.35; }
