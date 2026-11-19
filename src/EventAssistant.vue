@@ -24,9 +24,9 @@ function persistConversation(messages) {
   if (!storageKey.value) return
   try {
     if (!messages.length) { localStorage.removeItem(storageKey.value); return }
-    const history = messages.slice(-80).map(({ id, role, text, error, sources }) => ({
-      id, role, text: String(text).slice(0, 5000), ...(error ? { error: String(error).slice(0, 500) } : {}),
-      ...(Array.isArray(sources) ? { sources: sources.slice(0, 5).map(source => ({ eventoId: source.eventoId, evento: source.evento, fechaInicio: source.fechaInicio, precio: source.precio })) } : {}),
+    const history = messages.slice(-80).map(({ id, role, text, error, sources, retrieval }) => ({
+      id, role, text: String(text).slice(0, 5000), ...(error ? { error: String(error).slice(0, 500) } : {}), ...(retrieval ? { retrieval: String(retrieval).slice(0, 200) } : {}),
+      ...(Array.isArray(sources) ? { sources: sources.slice(0, 5).map(source => ({ eventoId: source.eventoId, evento: source.evento, fechaInicio: source.fechaInicio, precio: source.precio, score: source.score, cuposDisponibles: source.cuposDisponibles })) } : {}),
     }))
     localStorage.setItem(storageKey.value, JSON.stringify(history))
   } catch { /* La conversación sigue disponible en memoria si el almacenamiento del navegador está lleno o bloqueado. */ }
@@ -54,14 +54,21 @@ async function send(prompt = input.value, existingMessage = null) {
         eventIds: message.role === 'assistant' ? (message.sources || []).map(source => Number(source.eventoId)).filter(Number.isInteger) : [],
       }))
     const response = await api.chat(question, history)
-    if (!disposed) conversation.value.push({ id: ++nextMessageId, role: 'assistant', text: response.answer || 'No encontré información suficiente para responder.', sources: response.sources || [] })
+    if (!disposed) conversation.value.push({ id: ++nextMessageId, role: 'assistant', text: response.answer || 'No encontré información suficiente para responder.', sources: response.sources || [], retrieval: response.retrieval || '' })
   } catch (failure) {
     if (!disposed) userMessage.error = failure.status === 404
       ? 'El asistente aún no está habilitado en la API que estás usando. Puedes explorar la cartelera con los filtros de búsqueda.'
       : failure.status === 503
-        ? 'El servicio de IA no está disponible. Comprueba que Ollama siga iniciado y vuelve a intentarlo.'
+        ? 'El servicio de IA no está disponible en este momento. Vuelve a intentarlo en unos segundos.'
         : failure.message || 'No se pudo conectar con el asistente.'
   } finally { sending.value = false; if (!disposed) await scrollToLatest() }
+}
+// US-17: cada fuente muestra su puntaje de similitud y los cupos consultados en vivo
+function sourceMeta(source) {
+  const parts = []
+  if (Number.isFinite(Number(source.score)) && source.score !== null && source.score !== undefined) parts.push(`Relevancia ${Math.round(Number(source.score) * 100)}%`)
+  if (Number.isInteger(source.cuposDisponibles)) parts.push(source.cuposDisponibles === 0 ? 'Agotado' : `${source.cuposDisponibles} cupos`)
+  return parts.join(' · ')
 }
 function clearConversation() { if (!sending.value) conversation.value = [] }
 </script>
@@ -69,11 +76,11 @@ function clearConversation() { if (!sending.value) conversation.value = [] }
 <template>
   <aside class="discovery-aside" aria-label="Ayuda para encontrar eventos">
     <section class="assistant-panel">
-      <header class="assistant-header"><span class="assistant-avatar"><AppIcon name="bot" /></span><div><h2>Eventia Asistente</h2><p>Encuentra tu próximo evento</p></div><button v-if="conversation.length" class="chat-clear" :disabled="sending" @click="clearConversation">Limpiar</button><span class="assistant-indicator" title="Asistente de eventos"></span></header>
+      <header class="assistant-header"><span class="assistant-avatar"><AppIcon name="bot" /></span><div><h2>Eventia Asistente</h2><p>Respuestas basadas en los eventos publicados (RAG)</p></div><button v-if="conversation.length" class="chat-clear" :disabled="sending" @click="clearConversation">Limpiar</button><span class="assistant-indicator" title="Asistente de eventos"></span></header>
       <div ref="messageList" class="assistant-messages" role="log" aria-live="polite" aria-label="Conversación con el asistente">
         <div class="chat-message assistant"><span class="chat-avatar"><AppIcon name="sparkles" /></span><div class="chat-bubble">¡Hola, {{ firstName }}! ¿Qué te gustaría hacer? Cuéntame qué tipo de evento buscas, dónde y cuánto quieres gastar.</div></div>
         <div v-for="message in conversation" :key="message.id" class="chat-entry">
-          <div class="chat-message" :class="message.role"><span v-if="message.role === 'assistant'" class="chat-avatar"><AppIcon name="sparkles" /></span><div class="chat-bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="chat-sources"><button v-for="source in message.sources" :key="source.eventoId" @click="$emit('open-event', source.eventoId)"><div><strong>{{ source.evento }}</strong><span>{{ new Date(source.fechaInicio).toLocaleDateString('es-PE') }} · {{ Number(source.precio) === 0 ? 'Gratis' : 'S/ ' + Number(source.precio).toFixed(2) }}</span></div><AppIcon name="arrow" /></button></div></div></div>
+          <div class="chat-message" :class="message.role"><span v-if="message.role === 'assistant'" class="chat-avatar"><AppIcon name="sparkles" /></span><div class="chat-bubble"><p>{{ message.text }}</p><div v-if="message.sources?.length" class="chat-sources"><small class="chat-context">Contexto RAG · {{ message.retrieval || 'eventos publicados recuperados' }}</small><button v-for="source in message.sources" :key="source.eventoId" @click="$emit('open-event', source.eventoId)"><div><strong>{{ source.evento }}</strong><span>{{ new Date(source.fechaInicio).toLocaleDateString('es-PE') }} · {{ Number(source.precio) === 0 ? 'Gratis' : 'S/ ' + Number(source.precio).toFixed(2) }}</span><span v-if="sourceMeta(source)">{{ sourceMeta(source) }}</span></div><AppIcon name="arrow" /></button></div></div></div>
           <div v-if="message.error" class="chat-failure" role="alert"><p>{{ message.error }}</p><button :disabled="sending" @click="send(message.text, message)">Reintentar</button></div>
         </div>
         <div v-if="sending" class="chat-message assistant"><span class="chat-avatar"><AppIcon name="sparkles" /></span><div class="chat-bubble chat-loading" role="status">Buscando eventos<span>…</span></div></div>

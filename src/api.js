@@ -71,7 +71,7 @@ export const api = {
   modPanel: () => get('/Moderacion/panel'), modEventos: (params = {}) => get(`/Moderacion/eventos?${query(params)}`), modEvento: (id) => get(`/Moderacion/eventos/${id}`),
   moderarEvento: (id, body) => put(`/Moderacion/eventos/${id}/moderar`, body), reportarEvento: (id, motivo) => post(`/Moderacion/eventos/${id}/reportar`, { motivo }),
   reportes: (estado = '') => get(`/Moderacion/reportes?${query({ estado })}`), resolverReporte: (id, body) => put(`/Moderacion/reportes/${id}/resolver`, body),
-  usuarios: (params = {}) => get(`/Moderacion/usuarios?${query(params)}`), cambiarEstadoUsuario: (id, body) => put(`/Moderacion/usuarios/${id}/estado`, body), verificarUsuario: (id) => put(`/Moderacion/usuarios/${id}/verificar`),
+  usuarios: (params = {}) => get(`/Moderacion/usuarios?${query(params)}`), cambiarEstadoUsuario: (id, body) => put(`/Moderacion/usuarios/${id}/estado`, body), verificarUsuario: (id) => put(`/Moderacion/usuarios/${id}/verificar`), nombrarAdministrador: (id, body) => put(`/Moderacion/usuarios/${id}/administrador`, body),
   auditoria: (params = {}) => get(`/Moderacion/auditoria?${query(params)}`), exportarAuditoria: () => download('/Moderacion/auditoria/exportar'),
   reglas: () => get('/Moderacion/reglas'), crearRegla: (body) => post('/Moderacion/reglas', body), toggleRegla: (id, activa) => put(`/Moderacion/reglas/${id}/activa?activa=${activa}`),
 }

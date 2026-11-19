@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from 'firebase/auth'
 import { auth } from './firebase'
 
@@ -10,12 +11,20 @@ import { auth } from './firebase'
 export async function registerWithEmail({ email, password, nombre }) {
   const credential = await createUserWithEmailAndPassword(auth, email, password)
   await updateProfile(credential.user, { displayName: nombre })
+  // La verificación del correo permite vincular un perfil que ya existía en la plataforma.
+  // Si el envío falla, la cuenta igual queda creada y se puede reenviar después.
+  try { await sendEmailVerification(credential.user) } catch { /* El registro no depende del correo. */ }
   return credential.user
 }
 
 /** Inicia una sesión con el proveedor Email/Password de Firebase. */
 export function loginWithEmail({ email, password }) {
   return signInWithEmailAndPassword(auth, email, password)
+}
+
+/** Reenvía el correo de verificación a la cuenta que tiene la sesión abierta. */
+export function resendVerification() {
+  return auth?.currentUser ? sendEmailVerification(auth.currentUser) : Promise.resolve()
 }
 
 /** Firebase devuelve siempre una respuesta genérica para evitar revelar cuentas existentes. */

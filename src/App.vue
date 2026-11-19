@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { api } from './api'
 import { auth, firebaseConfigured } from './firebase'
-import { authenticationErrorMessage, loginWithEmail, registerWithEmail, requestPasswordReset } from './authentication'
+import { authenticationErrorMessage, loginWithEmail, registerWithEmail, requestPasswordReset, resendVerification } from './authentication'
 import QrDinamico from './QrDinamico.vue'
 import AppIcon from './AppIcon.vue'
 import ActionDialog from './ActionDialog.vue'
@@ -172,6 +172,12 @@ async function loadProfile() {
     else { profileLoadError.value = error.message || 'No se pudo cargar tu perfil.'; if (profile.value) notify(profileLoadError.value) }
   } finally { if (requestId === profileRequest) profileLoading.value = false }
 }
+// Tras verificar el correo, Firebase solo lo refleja en un token nuevo: se renueva antes de reintentar.
+async function retryProfile() {
+  try { await auth?.currentUser?.reload(); await auth?.currentUser?.getIdToken(true) } catch { /* Se reintenta con el token actual. */ }
+  await loadProfile()
+}
+async function resendVerificationEmail() { await action(() => resendVerification(), 'Te enviamos el correo de verificación. Ábrelo y luego pulsa Reintentar.') }
 async function loadInterests() { const data = await action(() => api.intereses(), ''); if (data) interests.value = items(data, 'categorias').map(category => Number(category.categoriaId)) }
 async function loadTickets() {
   const result = await action(() => api.entradas(), '')
@@ -343,7 +349,7 @@ async function activateOrganizer() {
 }
 async function setRole(role) { if (!await canLeaveForm()) return; const result = await action(() => api.cambiarRol(role), 'Rol actualizado.'); if (result) { activeRole.value = result.rolActivo || role; await selectSection(role === 'ORGANIZADOR' ? 'organizar' : role === 'ADMINISTRADOR' ? 'moderacion' : 'explorar') } }
 async function createAccount(form) {
-  if (!auth) return notify('Configura Firebase en .env.local para crear cuentas reales.')
+  if (!auth) return notify('Falta la configuración de Firebase (archivo .env) para crear cuentas.')
   // Validamos antes de crear la cuenta en Firebase para no dejar cuentas a medias
   if (!/^\d{8}$/.test(form.dni)) return notify('El DNI debe tener 8 dígitos.')
   if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/\d/.test(form.password)) return notify('La contraseña debe tener mínimo 8 caracteres, una mayúscula y un número.')
@@ -372,12 +378,15 @@ async function markRead(notification) { const result = await action(() => api.le
 async function markAllRead() { const result = await action(() => api.leerTodas(), 'Notificaciones marcadas como leídas.'); if (result !== false) notifications.value.forEach(n => n.leida = true) }
 async function moderate(event) {
   if (busy.value) return
-  const answer = await ask({ title: event.estadoModeracion === 'CONFORME' ? 'Suspender evento' : 'Aprobar evento', description: 'La decisión cambia la visibilidad y disponibilidad del evento.', fields: [{ key: 'motivo', label: 'Motivo de la decisión', required: true }], confirm: 'Guardar decisión' })
+  const answer = await ask({ title: event.estadoModeracion === 'CONFORME' ? 'Suspender evento' : 'Aprobar evento', description: 'La decisión cambia la visibilidad y disponibilidad del evento.', fields: [{ key: 'motivo', label: 'Motivo de la decisión', required: true }, { key: 'validacionSunat', label: 'Validación SUNAT (RUC del organizador)', options: validationOptions }, { key: 'validacionMunicipal', label: 'Licencia municipal', options: validationOptions }], confirm: 'Guardar decisión' })
   if (!answer) return
   const { motivo } = answer
-  const r = await action(() => api.moderarEvento(event.eventoId, { estadoModeracion: event.estadoModeracion === 'CONFORME' ? 'DESACTIVADO' : 'CONFORME', motivo, confirmado: true }), 'Moderación actualizada.')
+  const r = await action(() => api.moderarEvento(event.eventoId, { estadoModeracion: event.estadoModeracion === 'CONFORME' ? 'DESACTIVADO' : 'CONFORME', motivo, confirmado: true, validacionSunat: triState(answer.validacionSunat), validacionMunicipal: triState(answer.validacionMunicipal) }), 'Moderación actualizada.')
   if (r !== false) await loadModTab()
 }
+// US-15: el admin deja constancia de la documentación revisada; '' = no cambiar el valor guardado
+const validationOptions = [{ value: '', label: 'Sin cambios' }, { value: 'true', label: 'Validado' }, { value: 'false', label: 'No validado' }]
+function triState(value) { return value === 'true' ? true : value === 'false' ? false : null }
 async function resolveReport(report) {
   const answer = await ask({ title: 'Resolver reporte', description: 'Deja una explicación para el registro de moderación.', fields: [{ key: 'resolucion', label: 'Resolución', required: true }], confirm: 'Resolver reporte' })
   if (!answer) return
@@ -393,13 +402,19 @@ async function changeUser(user) {
   await loadModTab()
 }
 async function createRule() {
-  const answer = await ask({ title: 'Nueva regla de moderación', description: 'Describe qué contenido requiere revisión.', fields: [{ key: 'nombre', label: 'Nombre', required: true, maxlength: 80 }, { key: 'criterio', label: 'Criterio de revisión', required: true }], confirm: 'Crear regla' })
+  const answer = await ask({ title: 'Nueva regla de moderación', description: 'Describe en lenguaje natural qué contenido requiere revisión. La IA evaluará cada evento al publicarse o editarse y, si lo incumple, lo dejará en revisión con un reporte.', fields: [{ key: 'nombre', label: 'Nombre', required: true, maxlength: 80 }, { key: 'criterio', label: 'Criterio de revisión', required: true }], confirm: 'Crear regla' })
   if (!answer) return
   const { nombre, criterio } = answer
   await action(() => api.crearRegla({ nombre, tipo: 'IA', criterio, accion: 'EN_REVISION' }), 'Regla creada.')
   await loadModTab()
 }
 async function toggleRule(rule) { const result = await action(() => api.toggleRegla(rule.reglaId, !rule.activa), `Regla ${rule.activa ? 'desactivada' : 'activada'}.`); if (result !== false) rule.activa = !rule.activa }
+async function makeAdmin(user) {
+  const answer = await ask({ title: `Nombrar administrador a ${user.nombre}`, description: `${user.email} podrá moderar eventos, suspender cuentas, crear reglas y nombrar a otros administradores. Quedará registrado en la auditoría.`, fields: [{ key: 'motivo', label: 'Motivo', required: true }], confirm: 'Nombrar administrador' })
+  if (!answer) return
+  await action(() => api.nombrarAdministrador(user.usuarioId, { motivo: answer.motivo, confirmado: true }), `${user.nombre} ahora es administrador.`)
+  await loadModTab()
+}
 async function verifyUser(user) { await action(() => api.verificarUsuario(user.usuarioId), 'Cuenta verificada.'); await loadModTab() }
 
 async function logout() { if (await canLeaveForm()) await action(() => signOut(auth), 'Sesión cerrada.') }
@@ -449,7 +464,7 @@ onUnmounted(dejarDeEscucharCupos)
       <section class="auth-story"><div class="eyebrow"><span class="sparkle">✳</span> TU PRÓXIMA HISTORIA EMPIEZA AQUÍ</div><h1 tabindex="-1">Tu próximo plan<br><em>empieza aquí.</em></h1><p>Encuentra conciertos, cultura y experiencias para vivir la ciudad de otra manera.</p><div class="auth-photo"><div><span>✳</span><b>Nos vemos<br>ahí afuera.</b></div></div><div class="auth-trust"><span>✳</span> Música · Cultura · Experiencias</div></section>
       <section class="auth-card"><button class="text-button" @click="leaveAccess()">← Seguir explorando</button><p v-if="pendingCheckout" class="info-callout">Accede para completar tu reserva. Conservaremos el evento y la cantidad elegida.</p>
         <template v-if="profileLoading"><h2>Cargando tu cuenta…</h2><p class="auth-card-copy" role="status">Estamos recuperando tu perfil y tus permisos.</p></template>
-        <template v-else-if="profileLoadError"><h2>No pudimos abrir tu cuenta.</h2><p class="form-error" role="alert">{{ profileLoadError }}</p><button class="primary-button" @click="loadProfile">Reintentar</button><button class="text-button" @click="logout">Usar otra cuenta</button></template>
+        <template v-else-if="profileLoadError"><h2>No pudimos abrir tu cuenta.</h2><p class="form-error" role="alert">{{ profileLoadError }}</p><button class="primary-button" @click="retryProfile">Reintentar</button><button v-if="firebaseUser && !firebaseUser.emailVerified" class="text-button" @click="resendVerificationEmail">Reenviar correo de verificación</button><button class="text-button" @click="logout">Usar otra cuenta</button></template>
         <template v-else-if="!hasFirebaseAccount">
           <div class="auth-tabs" role="tablist" aria-label="Acceso a Eventia"><button role="tab" :aria-selected="authMode==='login'" :class="{ active: authMode==='login' }" @click="authMode='login'">Iniciar sesión</button><button role="tab" :aria-selected="authMode==='register'" :class="{ active: authMode==='register' }" @click="authMode='register'">Crear cuenta</button></div>
           <Login v-if="authMode==='login'" :busy="busy" :configured="firebaseConfigured" :email="authForm.email" @email-change="authForm.email=$event" @submit="login" @reset-password="resetPassword" @switch="authMode='register'" />
@@ -535,7 +550,7 @@ onUnmounted(dejarDeEscucharCupos)
 
         <NotificationsPage v-else-if="active === 'avisos'" :notifications="notifications" @mark-read="markRead" @mark-all-read="markAllRead" />
 
-        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @toggle-rule="toggleRule" />
+        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @make-admin="makeAdmin" @toggle-rule="toggleRule" />
       </main>
       <div v-if="active === 'detalle' && eventDetail" class="mobile-reservation"><div><strong>{{ Number(eventDetail.precio) === 0 ? 'Gratis' : 'S/ ' + (Number(eventDetail.precio)*detailQuantity).toFixed(2) }}</strong><small>Reserva sin cobro · demostración</small></div><button class="primary-button" :disabled="!eventDetail.disponibleParaCompra || !purchaseLimit(eventDetail)" @click="openCheckout(eventDetail,detailQuantity)">{{ eventDetail.disponibleParaCompra ? 'Reservar' : 'No disponible' }}</button></div>
       <footer class="app-footer"><span>EVENTIA · EVENTOS PARA VIVIRLOS</span><span>Hecho para encontrarnos · Perú</span></footer>

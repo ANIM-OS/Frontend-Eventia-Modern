@@ -1,43 +1,57 @@
 # Eventia Modern
 
-Frontend independiente de Eventia creado con Vue 3, Quasar y Vite. Conserva la integración con la API, autenticación Firebase opcional y SignalR para actualizar aforos en tiempo real.
+Frontend de Eventia (EventosPeruIA – Ticket Inteligente) creado con Vue 3, Quasar y Vite. Se conecta a la API en ASP.NET Core, usa Firebase Authentication para el inicio de sesión y SignalR para actualizar los aforos en tiempo real.
 
-## Desarrollo
+## Puesta en marcha
 
-1. Copia `.env.example` a `.env.local` y configura `VITE_API_PROXY_TARGET` y las variables de Firebase.
+No hay que crear ni copiar ningún archivo de configuración:
+
+1. Levanta la API (`dotnet run --project EventosIAPeruAPI` en el repositorio del backend). Queda en `http://localhost:5295`.
 2. Instala dependencias con `pnpm install`.
-3. Inicia el servidor con `pnpm dev`.
-4. Genera el bundle de producción con `pnpm build`.
+3. Inicia el frontend con `pnpm dev` y abre la dirección que muestra la consola.
+
+El archivo `.env` del repositorio ya trae la dirección de la API y la configuración web de Firebase.
+
+### ¿Por qué `.env` está en el repositorio?
+
+Los valores `VITE_FIREBASE_*` son la configuración **pública** del cliente web de Firebase: viajan en el JavaScript que descarga cualquier navegador y no dan acceso a nada por sí solos. Lo que protege la plataforma es que la API valida el token de cada sesión y decide los permisos en el servidor.
+
+Aquí **nunca** deben ir secretos (contraseñas de base de datos, API keys de IA): todo lo que empieza con `VITE_` termina visible en el navegador.
+
+Si necesitas otros valores solo en tu máquina (por ejemplo, otra dirección de la API), crea un archivo `.env.local`; tiene prioridad sobre `.env` y no se sube.
+
+| Variable | Para qué sirve |
+|---|---|
+| `VITE_API_BASE_URL` | Prefijo de la API que usa el navegador (`/api` en desarrollo). |
+| `VITE_API_PROXY_TARGET` | Dónde corre la API en desarrollo; Vite reenvía `/api` y `/hubs` a esa dirección. |
+| `VITE_FIREBASE_*` | Proyecto de Firebase Authentication (correo y contraseña). |
+
+## Cuentas y verificación de correo
+
+- Al registrarse, Firebase envía un correo de verificación.
+- La API identifica cada cuenta por su UID de Firebase. Un correo que **ya tenía un perfil** en la plataforma (por ejemplo, un usuario creado por script) solo se vincula cuando ese correo está verificado; en ese caso la pantalla muestra el aviso con los botones **Reintentar** y **Reenviar correo de verificación**.
+- Las cuentas nuevas no necesitan verificar el correo para empezar a usar la plataforma.
+
+## Scripts
+
+| Comando | Descripción |
+|---|---|
+| `pnpm dev` | Servidor de desarrollo. |
+| `pnpm build` | Genera el sitio estático en `dist/`. |
+| `pnpm test` | Pruebas de la lógica (acceso el día del evento, edición, QR, cupos). |
 
 ## Publicación
 
-Este proyecto genera un frontend estático en `dist/`. Configura las mismas variables `VITE_*` en el entorno de compilación de tu proveedor y publica el contenido de esa carpeta. `VITE_API_BASE_URL` debe apuntar a la API accesible desde el navegador en producción; `VITE_API_PROXY_TARGET` solo se usa como destino del proxy de desarrollo de Vite.
+`pnpm build` genera un frontend estático en `dist/`. En producción, `VITE_API_BASE_URL` debe apuntar a la API accesible desde el navegador y hay que agregar el dominio publicado en dos lugares: en `Cors:Origenes` de la API y en los dominios autorizados de Firebase Authentication.
 
-Para habilitar el inicio de sesión y el registro, configura `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` y `VITE_FIREBASE_APP_ID`. En Firebase Console, habilita el proveedor Email/Password y agrega el dominio publicado a los dominios autorizados de Authentication. Estas variables identifican el proyecto cliente de Firebase; las reglas y permisos de la API deben seguir validando cada sesión mediante el token de Firebase.
+El sitio usa rutas hash (por ejemplo `#/acceso`), que funcionan al servir `index.html` desde la raíz.
 
-El sitio usa rutas hash (por ejemplo `#/acceso`), que funcionan al servir `index.html` desde la raíz. Si se publica bajo un subdirectorio, ajusta la base de Vite y la configuración del servidor para servir los assets desde ese prefijo.
+## Organización
 
-## Organización de autenticación
-
-- `src/Login.vue` presenta el formulario de inicio de sesión y recuperación de contraseña.
-- `src/Register.vue` presenta los datos de registro y valida visualmente los requisitos de contraseña.
-- `src/authentication.js` concentra las operaciones Firebase y la traducción de errores de autenticación.
-- `src/firebase.js` inicializa Firebase Authentication solo cuando están configuradas todas las variables necesarias.
-- `src/App.vue` conserva la ruta `#/acceso`, la sesión y la coordinación con la creación del perfil de Eventia.
-
-## Organización de vistas
-
-Las pantallas principales viven en `src/pages/`: cartelera, detalle del evento, ayuda, entradas, control de acceso, cuenta, reseñas, notificaciones y moderación. Cada vista recibe sus datos por propiedades y comunica acciones al componente principal mediante eventos. `src/EventForm.vue` mantiene separado el formulario de creación y edición de eventos. `src/App.vue` conserva la coordinación de rutas, sesión y carga de datos. Los controles compartidos (tarjetas, QR, aforo y diálogos) permanecen en componentes independientes en `src/`.
-
-## Funciones
-
-- Búsqueda de eventos con filtros, categorías, páginas, recomendaciones y asistente conversacional.
-- Detalle de evento, reseñas, reportes y reservas con una o varias entradas.
-- Inicio y registro de sesión, perfil, intereses y cambio de rol.
-- Entradas con código QR dinámico y compartir evento.
-- Panel de organizador, creación y edición de eventos, publicación, cancelación, ventas y exportaciones.
-- Control de acceso por cámara, foto, imagen o validación manual.
-- Notificaciones, reseñas pendientes y publicadas.
-- Moderación de eventos y reportes, gestión de usuarios, auditoría y reglas.
-
-El logo de Eventia se conserva en `public/brand`. El proyecto no copia credenciales locales; usa el `.env.example` como plantilla.
+- `src/App.vue`: estado de la aplicación, navegación y llamadas a la API.
+- `src/pages/`: una vista por sección (explorar, detalle, entradas, reseñas, notificaciones, moderación, cuenta).
+- `src/api.js` y `src/http.js`: cliente de la API; agrega el token de Firebase a cada petición.
+- `src/authentication.js` y `src/firebase.js`: registro, inicio de sesión, recuperación de contraseña y verificación de correo.
+- `src/EventAssistant.vue`: asistente con RAG; muestra las fuentes con su relevancia y los cupos en vivo.
+- `src/aforo.js`: cupos en tiempo real con SignalR.
+- `src/AccessControl.vue` y `src/QrDinamico.vue`: check-in con cámara y QR dinámico.

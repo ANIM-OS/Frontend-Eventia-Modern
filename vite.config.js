@@ -9,13 +9,13 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
-          target: env.VITE_API_PROXY_TARGET || 'https://localhost:7224',
+          target: env.VITE_API_PROXY_TARGET || 'http://localhost:5295',
           changeOrigin: true,
           secure: false,
         },
         // US-09: SignalR (cupos en tiempo real) usa WebSockets
         '/hubs': {
-          target: env.VITE_API_PROXY_TARGET || 'https://localhost:7224',
+          target: env.VITE_API_PROXY_TARGET || 'http://localhost:5295',
           changeOrigin: true,
           secure: false,
           ws: true,
