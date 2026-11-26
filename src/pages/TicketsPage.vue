@@ -1,5 +1,5 @@
 <script setup>
-import { canShowTicketQr } from '../eventLogic'
+import { canShowTicketQr, ticketState } from '../eventLogic'
 import { statusLabel } from '../uiLogic'
 
 defineProps({
@@ -18,7 +18,7 @@ defineEmits(['clear-purchase', 'show-ticket', 'show-purchase', 'refresh', 'clear
     <div class="panel-card">
       <div class="panel-head"><h2>{{ selectedPurchaseId ? `Entradas de la compra #${selectedPurchaseId}` : 'Tus entradas' }}</h2><button v-if="selectedPurchaseId" class="text-button" @click="$emit('clear-purchase')">Ver todas</button><span v-else>{{ ticketList.length }} entradas</span></div>
       <div v-if="ticketList.length" class="ticket-list"><article v-for="ticket in ticketList" :key="ticket.entradaId" class="ticket-row">
-        <div class="ticket-main"><b>{{ ticket.eventoNombre || ticket.eventoTitulo || 'Entrada #' + ticket.entradaId }}</b><small>{{ ticket.titularNombre }} · {{ statusLabel(ticket.tipoAcceso) }}</small><small v-if="ticket.fechaInicio">{{ new Date(ticket.fechaInicio).toLocaleString('es-PE', { timeZone: 'America/Lima' }) }}<template v-if="ticket.sede"> · {{ ticket.sede }}</template></small><span class="ticket-state">{{ ticket.estado === 'UTILIZADA' ? 'Ingreso registrado' : canShowTicketQr(ticket) ? 'Pendiente de ingreso' : 'Entrada anulada o no disponible' }}</span></div>
+        <div class="ticket-main"><b>{{ ticket.eventoNombre || ticket.eventoTitulo || 'Entrada #' + ticket.entradaId }}</b><small>{{ ticket.titularNombre }} · {{ statusLabel(ticket.tipoAcceso) }}</small><small v-if="ticket.fechaInicio">{{ new Date(ticket.fechaInicio).toLocaleString('es-PE', { timeZone: 'America/Lima' }) }}<template v-if="ticket.sede"> · {{ ticket.sede }}</template></small><span class="ticket-state" :class="'is-' + ticketState(ticket).tone">{{ ticketState(ticket).label }}</span></div>
         <button v-if="canShowTicketQr(ticket)" class="ticket-qr-button" @click="$emit('show-ticket', ticket)" :aria-label="'Mostrar QR de ' + ticket.titularNombre"><span class="ticket-qr-icon" aria-hidden="true">▦</span> Mostrar QR</button>
       </article></div>
       <div v-else-if="!sectionLoading" class="empty-inline">{{ selectedPurchaseId ? 'No se encontraron entradas para esta compra. Actualiza la lista o consulta todas tus entradas.' : 'Todavía no tienes entradas. Encuentra un evento y reserva tu lugar.' }}</div>

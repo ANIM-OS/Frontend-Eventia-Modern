@@ -104,3 +104,15 @@ test('editar el horario de Perú conserva el instante UTC sin depender de la zon
   assert.equal(peruInputValue(instant), '2026-11-06T20:30')
   assert.equal(peruInputISO(peruInputValue(instant)), instant)
 })
+
+test('una entrada sin ingreso de un evento ya terminado no muestra QR ni queda "pendiente"', async () => {
+  const { ticketState } = await import('../src/eventLogic.js')
+  const now = new Date('2026-11-26T22:00:00Z')
+  const terminado = { estado: 'VALIDA', compraEstado: 'CONFIRMADA', fechaFin: '2026-11-26T21:00:00Z' }
+  const proximo = { estado: 'VALIDA', compraEstado: 'CONFIRMADA', fechaFin: '2026-11-27T21:00:00Z' }
+  assert.equal(canShowTicketQr(terminado, now), false)
+  assert.equal(ticketState(terminado, now).label, 'Evento finalizado · no registró ingreso')
+  assert.equal(canShowTicketQr(proximo, now), true)
+  assert.equal(ticketState(proximo, now).label, 'Pendiente de ingreso')
+  assert.equal(ticketState({ estado: 'UTILIZADA', fechaFin: '2026-11-26T21:00:00Z' }, now).label, 'Ingreso registrado')
+})
