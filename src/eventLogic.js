@@ -21,4 +21,12 @@ export function enrichTickets(tickets, purchases) {
   for (const purchase of purchases) for (const ticket of purchase.entradas || []) details.set(ticket.entradaId, { compraId: purchase.compraId, eventoTitulo: purchase.eventoTitulo, fechaInicio: purchase.fechaInicio, compraEstado: purchase.estado })
   return tickets.map(ticket => ({ ...ticket, ...details.get(ticket.entradaId) }))
 }
-export const canShowTicketQr = (ticket) => ticket?.estado === 'VALIDA' && (!ticket.compraEstado || ticket.compraEstado === 'CONFIRMADA')
+// El evento de la entrada ya terminó (fechaFin llega desde la API)
+export const ticketEnded = (ticket, now = new Date()) => Boolean(ticket?.fechaFin) && new Date(ticket.fechaFin) <= now
+export const canShowTicketQr = (ticket, now = new Date()) => ticket?.estado === 'VALIDA' && (!ticket.compraEstado || ticket.compraEstado === 'CONFIRMADA') && !ticketEnded(ticket, now)
+export function ticketState(ticket, now = new Date()) {
+  if (ticket?.estado === 'UTILIZADA') return { label: 'Ingreso registrado', tone: 'ok' }
+  if (ticket?.estado === 'VALIDA' && ticketEnded(ticket, now)) return { label: 'Evento finalizado · no registró ingreso', tone: 'muted' }
+  if (canShowTicketQr(ticket, now)) return { label: 'Pendiente de ingreso', tone: 'pending' }
+  return { label: 'Entrada anulada o no disponible', tone: 'muted' }
+}
