@@ -8,7 +8,7 @@ import QrDinamico from './QrDinamico.vue'
 import AppIcon from './AppIcon.vue'
 import ActionDialog from './ActionDialog.vue'
 import { modal as vModal } from './modal'
-import { statusLabel, purchaseLimit, attendeeError, documentError, peruInputISO, peruInputValue } from './uiLogic'
+import { statusLabel, purchaseLimit, purchaseBlockReason, attendeeError, documentError, peruInputISO, peruInputValue } from './uiLogic'
 import EventCard from './EventCard.vue'
 import EventAssistant from './EventAssistant.vue'
 import AccessControl from './AccessControl.vue'
@@ -552,7 +552,7 @@ onUnmounted(dejarDeEscucharCupos)
 
         <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @make-admin="makeAdmin" @toggle-rule="toggleRule" />
       </main>
-      <div v-if="active === 'detalle' && eventDetail" class="mobile-reservation"><div><strong>{{ Number(eventDetail.precio) === 0 ? 'Gratis' : 'S/ ' + (Number(eventDetail.precio)*detailQuantity).toFixed(2) }}</strong><small>Reserva sin cobro · demostración</small></div><button class="primary-button" :disabled="!eventDetail.disponibleParaCompra || !purchaseLimit(eventDetail)" @click="openCheckout(eventDetail,detailQuantity)">{{ eventDetail.disponibleParaCompra ? 'Reservar' : 'No disponible' }}</button></div>
+      <div v-if="active === 'detalle' && eventDetail" class="mobile-reservation"><div><strong>{{ Number(eventDetail.precio) === 0 ? 'Gratis' : 'S/ ' + (Number(eventDetail.precio)*detailQuantity).toFixed(2) }}</strong><small>Reserva sin cobro · demostración</small></div><button class="primary-button" :disabled="!eventDetail.disponibleParaCompra || !purchaseLimit(eventDetail)" @click="openCheckout(eventDetail,detailQuantity)">{{ eventDetail.disponibleParaCompra ? 'Reservar' : purchaseBlockReason(eventDetail) }}</button></div>
       <footer class="app-footer"><span>EVENTIA · EVENTOS PARA VIVIRLOS</span><span>Hecho para encontrarnos · Perú</span></footer>
     </div>
     </q-page-container>

@@ -24,3 +24,15 @@ export function peruInputValue(value) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(value)).map(part => [part.type, part.value]))
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`
 }
+
+// Motivo por el que un evento no acepta reservas (para no mostrar solo "No disponible")
+export function purchaseBlockReason(event, now = new Date()) {
+  if (!event || event.disponibleParaCompra) return ''
+  if (event.estado === 'CANCELADO') return 'Evento cancelado'
+  if (event.estadoModeracion === 'DESACTIVADO') return 'Evento suspendido por moderación'
+  if (event.estado === 'BORRADOR') return 'Aún no está publicado'
+  if (event.finalizado || (event.fechaFin && new Date(event.fechaFin) <= now)) return 'El evento ya terminó'
+  if (event.fechaInicio && new Date(event.fechaInicio) <= now) return 'La venta cerró: el evento ya empezó'
+  if (event.agotado || Number(event.cuposDisponibles) <= 0) return 'Entradas agotadas'
+  return 'Entradas no disponibles'
+}

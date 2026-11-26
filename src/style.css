@@ -1267,3 +1267,10 @@ body, .q-layout { background: #f7f7f5; color: #1c1b1b; }
 /* Estado de la entrada: finalizado sin ingreso o anulada en gris; ingreso registrado en verde */
 .ticket-state.is-muted { background: #ebe9e4; color: #6b6964; }
 .ticket-state.is-ok { background: #e4f4ec; color: #17794a; }
+/* Respuestas del asistente con formato (párrafos, negritas y listas) */
+.chat-text { display: grid; gap: 8px; }
+.chat-text p { margin: 0; }
+.chat-text ul, .chat-text ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.chat-text li::marker { color: #777570; }
+.chat-text strong { font-weight: 700; color: inherit; }
+
