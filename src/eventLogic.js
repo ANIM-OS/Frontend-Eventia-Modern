@@ -1,4 +1,16 @@
-export const isPublished = (event) => ['PUBLICADO', 'ACTIVO'].includes(event?.estado) && event?.estadoModeracion !== 'DESACTIVADO'
+// Publicado = el organizador lo envió y un administrador lo aprobó (CONFORME)
+export const isPublished = (event) => ['PUBLICADO', 'ACTIVO'].includes(event?.estado) && event?.estadoModeracion === 'CONFORME'
+export const isPendingApproval = (event) => ['PUBLICADO', 'ACTIVO'].includes(event?.estado) && event?.estadoModeracion === 'EN_REVISION'
+// Estado del evento tal como lo ve el organizador
+export function organizerStatus(event) {
+  if (event?.estado === 'CANCELADO') return 'Cancelado'
+  if (event?.finalizado) return 'Finalizado'
+  if (event?.estadoModeracion === 'DESACTIVADO') return 'Rechazado por moderación'
+  if (event?.estado === 'BORRADOR') return 'Borrador'
+  if (isPendingApproval(event)) return 'Pendiente de aprobación'
+  if (isPublished(event)) return 'Publicado'
+  return 'Sin información'
+}
 export const canEditEvent = (event) => Boolean(event && event.estado !== 'CANCELADO' && event.estadoModeracion !== 'DESACTIVADO' && !event.finalizado)
 export const canPublishEvent = (event, now = new Date()) => event?.estado === 'BORRADOR' && canEditEvent(event) && new Date(event.fechaInicio) > now
 
@@ -8,7 +20,7 @@ const eventDay = (date) => {
 }
 export function accessStatus(event, now = new Date()) {
   if (!event) return { allowed: false, message: 'Selecciona el evento que estás recibiendo.' }
-  if (!isPublished(event)) return { allowed: false, message: 'El control de acceso requiere un evento publicado y habilitado.' }
+  if (!isPublished(event)) return { allowed: false, message: 'El control de acceso requiere un evento aprobado por un administrador.' }
   const start = new Date(event.fechaInicio), end = new Date(event.fechaFin)
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return { allowed: false, message: 'Este evento no tiene un horario válido.' }
   if (end <= now || event.finalizado) return { allowed: false, message: 'El evento terminó. Ya no se registran ingresos.' }

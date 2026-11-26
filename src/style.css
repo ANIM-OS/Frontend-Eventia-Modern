@@ -1274,3 +1274,29 @@ body, .q-layout { background: #f7f7f5; color: #1c1b1b; }
 .chat-text li::marker { color: #777570; }
 .chat-text strong { font-weight: 700; color: inherit; }
 
+/* Portada: reseñas de eventos ya realizados */
+.home-reviews { min-width: 0; }
+.home-review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+.home-review-card { display: grid; gap: 10px; align-content: start; padding: 18px; border: 1px solid #ebe9e4; border-radius: 14px; background: #fff; }
+.home-review-stars { color: #d8d5cd; font-size: 16px; letter-spacing: 2px; }
+.home-review-stars .on { color: #f2b01e; }
+.home-review-text { margin: 0; color: #2b2a28; font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.home-review-card footer { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12.5px; color: #6b6964; }
+.home-review-card footer .text-button { padding: 0; font-size: 12.5px; text-align: left; }
+/* Moderación: ventana emergente del evento y botones de decisión */
+.mod-modal { width: min(680px, 100%); padding: 0; display: grid; }
+.mod-modal-image { width: 100%; height: 220px; object-fit: cover; border-radius: 16px 16px 0 0; display: block; }
+.mod-modal-body { padding: 24px 28px 8px; display: grid; gap: 12px; }
+.mod-modal-body h2 { margin: 0; font-size: clamp(22px, 3vw, 28px); line-height: 1.15; letter-spacing: -.01em; }
+.mod-modal-org { margin: 0; color: #6b6964; }
+.mod-modal-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 4px 0; }
+.mod-modal-facts dt { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #8a877f; }
+.mod-modal-facts dd { margin: 2px 0 0; font-size: 13.5px; }
+.mod-modal-description { margin: 0; white-space: pre-line; color: #3b3a37; font-size: 14px; line-height: 1.55; }
+.mod-modal-reports { display: grid; gap: 8px; }
+.mod-modal-reports h3 { margin: 4px 0 0; font-size: 14px; }
+.mod-modal-ok { margin: 0; padding: 10px 12px; border-radius: 8px; background: #e4f4ec; color: #17794a; font-size: 13px; }
+.mod-modal-actions { position: sticky; bottom: 0; padding: 14px 28px 20px; background: #fff; border-top: 1px solid #ebe9e4; justify-content: flex-end; flex-wrap: wrap; }
+.row-actions .approve-button { background: #e4f4ec; color: #17794a; }
+.row-actions .reject-button, .reject-button { color: #b42318; }
+@media (max-width: 560px) { .mod-modal-facts { grid-template-columns: 1fr; } .mod-modal-body, .mod-modal-actions { padding-left: 18px; padding-right: 18px; } }

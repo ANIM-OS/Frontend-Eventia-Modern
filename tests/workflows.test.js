@@ -138,3 +138,13 @@ test('la respuesta del asistente convierte negritas y listas sin interpretar HTM
   assert.deepEqual(blocks[1].items[0][0], { text: 'Concurso de Marinera', bold: true })
   assert.equal(blocks[2].parts[0].text, '<script>alert(1)</script>')
 })
+
+test('un evento solo está publicado cuando un administrador lo aprueba', async () => {
+  const { isPublished, organizerStatus } = await import('../src/eventLogic.js')
+  assert.equal(isPublished({ estado: 'PUBLICADO', estadoModeracion: 'EN_REVISION' }), false)
+  assert.equal(isPublished({ estado: 'PUBLICADO', estadoModeracion: 'CONFORME' }), true)
+  assert.equal(organizerStatus({ estado: 'BORRADOR', estadoModeracion: 'EN_REVISION' }), 'Borrador')
+  assert.equal(organizerStatus({ estado: 'PUBLICADO', estadoModeracion: 'EN_REVISION' }), 'Pendiente de aprobación')
+  assert.equal(organizerStatus({ estado: 'PUBLICADO', estadoModeracion: 'CONFORME' }), 'Publicado')
+  assert.equal(organizerStatus({ estado: 'PUBLICADO', estadoModeracion: 'DESACTIVADO' }), 'Rechazado por moderación')
+})

@@ -9,6 +9,7 @@ const props = defineProps({
   categories: { type: Array, default: () => [] },
   popularCategories: { type: Array, default: () => [] },
   recommendations: { type: Array, default: () => [] },
+  recentReviews: { type: Array, default: () => [] },
   recommendationCaption: { type: String, default: '' },
   eventTotal: { type: Number, default: 0 },
   totalPages: { type: Number, default: 1 },
@@ -74,7 +75,7 @@ watch(() => props.query.texto, value => {
   timer = setTimeout(() => fetchSuggestions(texto), 250)
 })
 onBeforeUnmount(() => clearTimeout(timer))
-function chooseSuggestion(event) { closeSuggestions(); openEvent(event) }
+function chooseSuggestion(event) { closeSuggestions(); openEvent(event.eventoId) }
 function onSearchKeydown(e) {
   if (!suggestionsOpen.value) return
   const total = suggestions.value.length
@@ -147,6 +148,16 @@ function highlightParts(nombre) {
                 <div v-else-if="catalogLoading" class="event-grid" aria-label="Cargando eventos" role="status"><div v-for="number in 3" :key="number" class="event-skeleton"><div></div><span></span><span></span></div></div>
                 <div v-else class="empty-state"><AppIcon name="search" /><h3>No encontramos eventos con esos filtros</h3><p>Prueba con otra palabra, ciudad o fecha.</p><button class="secondary-button" @click="clearSearch">Limpiar filtros</button></div>
                 <div class="pagination"><span>Página {{ query.pagina }} de {{ totalPages }}</span><div><button :disabled="query.pagina <= 1 || busy" @click="changePage(-1)">Anterior</button><button v-for="page in Array.from({ length: Math.min(totalPages, 5) }, (_, i) => Math.min(Math.max(1, query.pagina - 2), Math.max(1, totalPages - 4)) + i)" :key="page" :class="{ current: page === query.pagina }" :disabled="busy" @click="changePage(page-query.pagina)">{{ page }}</button><button :disabled="query.pagina >= totalPages || busy" @click="changePage(1)">Siguiente</button></div></div>
+              </section>
+              <section v-if="recentReviews.length && !isSearching" class="home-reviews" style="order: 3" aria-labelledby="home-reviews-title">
+                <div class="feed-heading"><h2 id="home-reviews-title"><AppIcon name="sparkles" />Lo que dicen los asistentes</h2><p>Reseñas de eventos ya realizados, escritas por personas que asistieron.</p></div>
+                <div class="home-review-grid">
+                  <article v-for="review in recentReviews" :key="review.resenaId" class="home-review-card">
+                    <div class="home-review-stars" :aria-label="review.calificacion + ' de 5 estrellas'"><span v-for="n in 5" :key="n" :class="{ on: n <= review.calificacion }">★</span></div>
+                    <p class="home-review-text">“{{ review.comentario }}”</p>
+                    <footer><b>{{ review.usuarioNombre }}</b><button type="button" class="text-button" @click="openEvent(review.eventoId)">{{ review.eventoNombre }} ↗</button></footer>
+                  </article>
+                </div>
               </section>
             </div>
           </div>

@@ -26,7 +26,7 @@ import ModerationPage from './pages/ModerationPage.vue'
 import EventForm from './EventForm.vue'
 import BarraAforo from './BarraAforo.vue'
 import { onCuposActualizados, aplicarCupos } from './aforo'
-import { canEditEvent, canPublishEvent, canShowTicketQr, enrichTickets, isPublished } from './eventLogic'
+import { canEditEvent, canPublishEvent, canShowTicketQr, enrichTickets, isPublished, organizerStatus } from './eventLogic'
 
 const sections = [
   { id: 'explorar', label: 'Explorar', icon: '⌕' }, { id: 'entradas', label: 'Mis entradas', icon: '▤' },
@@ -81,7 +81,7 @@ const tickets = ref([]); const purchases = ref([]); const pendingReviews = ref([
 const recommendations = ref([]); const recommendationCaption = ref(''); const profileMenuOpen = ref(false); const assistantOpen = ref(false)
 const accessEventId = ref(''); const organizerView = ref('eventos'); const selectedTicket = ref(null); const selectedPurchaseId = ref(null)
 const profileLoading = ref(true); const profileLoadError = ref(''); const needsProfile = ref(false)
-const selectedCategory = ref(null); const modEventDetail = ref(null)
+const selectedCategory = ref(null); const modEventDetail = ref(null); const recentReviews = ref([])
 const notifications = ref([]); const sales = ref(null); const ownEvents = ref([])
 const modPanel = ref(null); const modEvents = ref([]); const reports = ref([]); const users = ref([]); const audit = ref([]); const rules = ref([])
 const query = reactive({ texto: '', categoriaId: '', ubicacion: '', fechaDesde: '', fechaHasta: '', soloDisponibles: true, pagina: 1, tamanoPagina: 12 })
@@ -210,6 +210,8 @@ async function loadNotifications() {
   const result = await action(() => api.notificaciones(), '')
   if (result) notifications.value = items(result, 'notificaciones')
 }
+// Portada: lo que opinan los asistentes de eventos ya realizados (público)
+async function loadRecentReviews() { try { recentReviews.value = await api.resenasRecientes(6) || [] } catch { recentReviews.value = [] } }
 async function loadModeration() {
   if (!isAdmin.value) return
   const result = await action(() => api.modPanel(), '')
@@ -230,7 +232,7 @@ async function loadModTab() {
   const result = await action(fetch, '')
   if (result && requestId === moderationRequest) state.value = items(result, key)
 }
-async function inspectModerationEvent(event) { modEventDetail.value = await action(() => api.modEvento(event.eventoId), '') }
+async function inspectModerationEvent(event) { const detail = await action(() => api.modEvento(event.eventoId), ''); if (detail) modEventDetail.value = detail }
 async function refreshSection() {
   const request = ++sectionRequest; sectionLoading.value = true
   try {
@@ -369,23 +371,26 @@ async function resetPassword(email) {
 }
 async function login(form) { if (!auth) return notify('Configura Firebase en .env.local para iniciar sesión.'); authForm.email = form.email; await action(() => loginWithEmail(form), '', false) }
 async function saveInterests() { await action(() => api.actualizarIntereses(interests.value), 'Preferencias guardadas.') }
-async function publishEvent(event) { if (!canPublishEvent(event) || busy.value) return; if (!await ask({ title: `Publicar “${event.nombre}”`, description: `Revisa el horario, la dirección, el aforo de ${event.aforoTotal} personas y el precio antes de publicarlo. El evento será visible y podrá recibir reservas.`, confirm: 'Publicar evento' })) return; await action(() => api.publicarEvento(event.eventoId), 'Evento publicado.'); await loadOrganizer() }
+async function publishEvent(event) { if (!canPublishEvent(event) || busy.value) return; if (!await ask({ title: `Solicitar aprobación de “${event.nombre}”`, description: `Un administrador revisará el evento (horario, dirección, aforo de ${event.aforoTotal} personas y precio). Cuando lo apruebe, se publicará en la cartelera y podrá recibir reservas. Te avisaremos con una notificación.`, confirm: 'Enviar solicitud' })) return; await action(() => api.publicarEvento(event.eventoId), 'Solicitud enviada. Te avisaremos cuando un administrador lo revise.'); await loadOrganizer() }
 async function cancelEvent(event) { if (!canEditEvent(event) || busy.value) return; if (!await ask({ title: `¿Cancelar “${event.nombre}”?`, description: 'El evento dejará de admitir reservas. Revisa las entradas emitidas y comunica a los asistentes qué ocurrirá con su reserva. No se tramitan reembolsos automáticos desde esta pantalla.', confirm: 'Cancelar evento', danger: true })) return; await action(() => api.cancelarEvento(event.eventoId), 'Evento cancelado.'); await loadOrganizer() }
 async function loadSales() { const r = await action(() => api.ventas(salesFilter), ''); if (r) sales.value = r }
 async function exportSales(format) { await action(() => api.exportarVentas(format, salesFilter), `Reporte ${format.toUpperCase()} descargado.`) }
 async function reportEvent(id) { const motivo = reportReason.value.trim(); if (motivo.length < 5) return notify('Escribe un motivo de al menos 5 caracteres.'); const r = await action(() => api.reportarEvento(id, motivo), 'Reporte enviado.'); if (r !== false) { reportReason.value = ''; showReport.value = false } }
 async function markRead(notification) { const result = await action(() => api.leerNotificacion(notification.notificacionId), 'Notificación marcada como leída.'); if (result !== false) notification.leida = true }
 async function markAllRead() { const result = await action(() => api.leerTodas(), 'Notificaciones marcadas como leídas.'); if (result !== false) notifications.value.forEach(n => n.leida = true) }
-async function moderate(event) {
+async function moderate(event, decision) {
   if (busy.value) return
-  const answer = await ask({ title: event.estadoModeracion === 'CONFORME' ? 'Suspender evento' : 'Aprobar evento', description: 'La decisión cambia la visibilidad y disponibilidad del evento.', fields: [{ key: 'motivo', label: 'Motivo de la decisión', required: true }, { key: 'validacionSunat', label: 'Validación SUNAT (RUC del organizador)', options: validationOptions }, { key: 'validacionMunicipal', label: 'Licencia municipal', options: validationOptions }], confirm: 'Guardar decisión' })
+  const copy = {
+    CONFORME: { title: `Aprobar “${event.nombre}”`, description: 'El evento se publicará en la cartelera y podrá recibir reservas. El organizador recibirá una notificación.', confirm: 'Aprobar y publicar', required: false, label: 'Comentario (opcional)', done: 'Evento aprobado y publicado.' },
+    DESACTIVADO: { title: `${event.estadoModeracion === 'CONFORME' ? 'Suspender' : 'Rechazar'} “${event.nombre}”`, description: 'El evento no se mostrará ni se podrá reservar. El organizador verá el motivo en sus notificaciones.', confirm: event.estadoModeracion === 'CONFORME' ? 'Suspender evento' : 'Rechazar evento', required: true, label: 'Motivo (lo verá el organizador)', done: 'Decisión guardada. Se notificó al organizador.' },
+  }[decision]
+  const answer = await ask({ title: copy.title, description: copy.description, danger: decision === 'DESACTIVADO', fields: [{ key: 'motivo', label: copy.label, required: copy.required }, { key: 'validacionSunat', label: 'Validación SUNAT (opcional)', options: validationOptions }, { key: 'validacionMunicipal', label: 'Licencia municipal (opcional)', options: validationOptions }], confirm: copy.confirm })
   if (!answer) return
-  const { motivo } = answer
-  const r = await action(() => api.moderarEvento(event.eventoId, { estadoModeracion: event.estadoModeracion === 'CONFORME' ? 'DESACTIVADO' : 'CONFORME', motivo, confirmado: true, validacionSunat: triState(answer.validacionSunat), validacionMunicipal: triState(answer.validacionMunicipal) }), 'Moderación actualizada.')
-  if (r !== false) await loadModTab()
+  const r = await action(() => api.moderarEvento(event.eventoId, { estadoModeracion: decision, motivo: answer.motivo?.trim() || null, confirmado: true, validacionSunat: triState(answer.validacionSunat), validacionMunicipal: triState(answer.validacionMunicipal) }), copy.done)
+  if (r !== false) { modEventDetail.value = null; await loadModeration() }
 }
 // US-15: el admin deja constancia de la documentación revisada; '' = no cambiar el valor guardado
-const validationOptions = [{ value: '', label: 'Sin cambios' }, { value: 'true', label: 'Validado' }, { value: 'false', label: 'No validado' }]
+const validationOptions = [{ value: '', label: 'Sin indicar' }, { value: 'true', label: 'Validado' }, { value: 'false', label: 'No validado' }]
 function triState(value) { return value === 'true' ? true : value === 'false' ? false : null }
 async function resolveReport(report) {
   const answer = await ask({ title: 'Resolver reporte', description: 'Deja una explicación para el registro de moderación.', fields: [{ key: 'resolucion', label: 'Resolución', required: true }], confirm: 'Resolver reporte' })
@@ -431,7 +436,7 @@ function resetSession() {
 onMounted(async () => {
   window.addEventListener('popstate', restoreRoute)
   window.addEventListener('beforeunload', beforeLeaving)
-  await Promise.all([loadCategories(), loadEvents()])
+  await Promise.all([loadCategories(), loadEvents(), loadRecentReviews()])
   if (!auth) { profileLoading.value = false; await restoreRoute(); return }
   let first = true
   authUnsubscribe = onAuthStateChanged(auth, async user => {
@@ -519,7 +524,7 @@ onUnmounted(dejarDeEscucharCupos)
         <div v-if="errorMessage" class="feedback-banner error-banner" role="alert"><div><b>No se pudo completar la acción</b><p>{{ errorMessage }}</p></div><button class="text-button" @click="errorMessage=''">Cerrar aviso</button></div>
         <p v-if="sectionLoading && !['explorar','ayuda'].includes(active)" class="info-callout" role="status">Actualizando esta sección…</p><p v-if="detailLoading" class="info-callout" role="status">Abriendo evento…</p>
         <HelpPage v-if="active === 'ayuda'" @navigate="selectSection" />
-        <DiscoveryPage v-if="active === 'explorar'" :events="events" :categories="categories" :popular-categories="popularCategories" :recommendations="recommendations" :recommendation-caption="recommendationCaption" :event-total="eventTotal" :total-pages="totalPages" :query="query" :catalog-loading="catalogLoading" :catalog-error="catalogError" :busy="busy" @load-events="loadEvents" @filter-category="filterByCategory" @open-event="openEvent" @change-page="changePage" />
+        <DiscoveryPage v-if="active === 'explorar'" :events="events" :categories="categories" :popular-categories="popularCategories" :recommendations="recommendations" :recent-reviews="recentReviews" :recommendation-caption="recommendationCaption" :event-total="eventTotal" :total-pages="totalPages" :query="query" :catalog-loading="catalogLoading" :catalog-error="catalogError" :busy="busy" @load-events="loadEvents" @filter-category="filterByCategory" @open-event="openEvent" @change-page="changePage" />
 
         <EventDetailPage v-else-if="active === 'detalle' && eventDetail" :event-detail="eventDetail" :review-summary="reviewSummary" :profile="profile" v-model:show-report="showReport" v-model:report-reason="reportReason" v-model:detail-quantity="detailQuantity" :purchase-limit="purchaseLimit" @navigate="selectSection" @report-event="reportEvent" @checkout="openCheckout" />
 
@@ -534,7 +539,7 @@ onUnmounted(dejarDeEscucharCupos)
             <div v-if="organizerView === 'eventos'" class="organizer-dashboard"><section class="organizer-welcome panel-card"><div><div class="section-kicker">PANEL DEL ORGANIZADOR</div><h2>Gestiona tus eventos.</h2><p>Publica tus próximos planes y consulta las ventas registradas.</p></div><div class="organizer-head-actions"><button class="secondary-button" @click="switchOrganizerView('ventas');loadSales()">Ver ventas</button><button class="primary-button" @click="selectSection('accesos')">Control de acceso</button></div></section>
               <div v-if="sales" class="stats-grid organizer-stats"><div><small>Total de reservas</small><strong>S/ {{ Number(sales.ingresosTotales).toFixed(2) }}</strong></div><div><small>Entradas emitidas</small><strong>{{ sales.entradasVendidas }}</strong></div><div><small>Ocupación total</small><strong>{{ Number(sales.tasaOcupacion).toFixed(1) }}%</strong></div><div><small>Eventos con aforo</small><strong>{{ sales.eventosConControlAforo }}</strong></div></div>
               <div class="organizer-columns"><div class="panel-card"><div class="panel-head"><h2>Mis eventos</h2><span>{{ ownEvents.length }} en total</span></div>
-              <div v-if="ownEvents.length" class="data-table"><div v-for="event in ownEvents" :key="event.eventoId" class="table-row organizer-row"><div><b>{{ event.nombre }}</b><small>{{ new Date(event.fechaInicio).toLocaleString('es-PE', { timeZone: 'America/Lima' }) }} · {{ statusLabel(event.estado) }} · {{ statusLabel(event.estadoModeracion) }}</small></div><BarraAforo :aforo-total="event.aforoTotal" :vendidas="event.entradasVendidas" /><div class="row-actions"><button v-if="canEditEvent(event)" :disabled="busy" @click="editEvent(event)">Editar</button><button v-if="canPublishEvent(event)" :disabled="busy" @click="publishEvent(event)">Publicar</button><button v-if="isPublished(event) && !event.finalizado" :disabled="busy" @click="openAccess(event)">Recibir asistentes</button><button v-if="canEditEvent(event)" :disabled="busy" @click="cancelEvent(event)">Cancelar evento</button></div></div></div>
+              <div v-if="ownEvents.length" class="data-table"><div v-for="event in ownEvents" :key="event.eventoId" class="table-row organizer-row"><div><b>{{ event.nombre }}</b><small>{{ new Date(event.fechaInicio).toLocaleString('es-PE', { timeZone: 'America/Lima' }) }} · {{ organizerStatus(event) }}</small></div><BarraAforo :aforo-total="event.aforoTotal" :vendidas="event.entradasVendidas" /><div class="row-actions"><button v-if="canEditEvent(event)" :disabled="busy" @click="editEvent(event)">Editar</button><button v-if="canPublishEvent(event)" :disabled="busy" @click="publishEvent(event)">Solicitar aprobación</button><button v-if="isPublished(event) && !event.finalizado" :disabled="busy" @click="openAccess(event)">Recibir asistentes</button><button v-if="canEditEvent(event)" :disabled="busy" @click="cancelEvent(event)">Cancelar evento</button></div></div></div>
               <div v-else-if="!sectionLoading" class="empty-inline">Empieza creando un borrador. Después podrás revisarlo y publicarlo.</div>
               </div><div class="organizer-access-column"><div class="section-kicker">DÍA DEL EVENTO</div><h2>Control de acceso</h2><p>Selecciona un evento en curso para validar entradas con cámara continua, una foto o los datos del titular.</p><AccessControl :events="ownEvents" :event-id="accessEventId" /><button class="text-button" @click="selectSection('accesos')">Abrir control de acceso completo ↗</button></div></div>
             </div>
@@ -550,7 +555,7 @@ onUnmounted(dejarDeEscucharCupos)
 
         <NotificationsPage v-else-if="active === 'avisos'" :notifications="notifications" @mark-read="markRead" @mark-all-read="markAllRead" />
 
-        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @make-admin="makeAdmin" @toggle-rule="toggleRule" />
+        <ModerationPage v-else-if="active === 'moderacion'" :is-admin="isAdmin" :mod-panel="modPanel" :mod-tab="modTab" :mod-search="modSearch" :mod-status="modStatus" :mod-events="modEvents" :reports="reports" :users="users" :audit="audit" :rules="rules" :mod-event-detail="modEventDetail" @update:tab="modTab=$event" @update:search="modSearch=$event" @update:status="modStatus=$event" @load-tab="loadModTab" @create-rule="createRule" @export-audit="action(()=>api.exportarAuditoria(),'Auditoría descargada.')" @inspect-event="inspectModerationEvent" @moderate="moderate" @close-detail="modEventDetail=null" @resolve-report="resolveReport" @change-user="changeUser" @verify-user="verifyUser" @make-admin="makeAdmin" @toggle-rule="toggleRule" />
       </main>
       <div v-if="active === 'detalle' && eventDetail" class="mobile-reservation"><div><strong>{{ Number(eventDetail.precio) === 0 ? 'Gratis' : 'S/ ' + (Number(eventDetail.precio)*detailQuantity).toFixed(2) }}</strong><small>Reserva sin cobro · demostración</small></div><button class="primary-button" :disabled="!eventDetail.disponibleParaCompra || !purchaseLimit(eventDetail)" @click="openCheckout(eventDetail,detailQuantity)">{{ eventDetail.disponibleParaCompra ? 'Reservar' : purchaseBlockReason(eventDetail) }}</button></div>
       <footer class="app-footer"><span>EVENTIA · EVENTOS PARA VIVIRLOS</span><span>Hecho para encontrarnos · Perú</span></footer>
