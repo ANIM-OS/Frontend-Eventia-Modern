@@ -116,3 +116,25 @@ test('una entrada sin ingreso de un evento ya terminado no muestra QR ni queda "
   assert.equal(ticketState(proximo, now).label, 'Pendiente de ingreso')
   assert.equal(ticketState({ estado: 'UTILIZADA', fechaFin: '2026-11-26T21:00:00Z' }, now).label, 'Ingreso registrado')
 })
+
+test('el botón de reserva explica por qué un evento no está disponible', async () => {
+  const { purchaseBlockReason } = await import('../src/uiLogic.js')
+  const now = new Date('2026-11-26T22:00:00Z')
+  const base = { estado: 'PUBLICADO', estadoModeracion: 'CONFORME', cuposDisponibles: 49, disponibleParaCompra: false, fechaInicio: '2026-11-26T21:30:00Z', fechaFin: '2026-11-26T23:00:00Z' }
+  assert.equal(purchaseBlockReason({ ...base, disponibleParaCompra: true }, now), '')
+  assert.equal(purchaseBlockReason(base, now), 'La venta cerró: el evento ya empezó')
+  assert.equal(purchaseBlockReason({ ...base, fechaFin: '2026-11-26T21:45:00Z' }, now), 'El evento ya terminó')
+  assert.equal(purchaseBlockReason({ ...base, estadoModeracion: 'DESACTIVADO' }, now), 'Evento suspendido por moderación')
+  assert.equal(purchaseBlockReason({ ...base, estado: 'CANCELADO' }, now), 'Evento cancelado')
+  assert.equal(purchaseBlockReason({ ...base, fechaInicio: '2026-11-27T21:00:00Z', fechaFin: '2026-11-27T23:00:00Z', cuposDisponibles: 0, agotado: true }, now), 'Entradas agotadas')
+})
+
+test('la respuesta del asistente convierte negritas y listas sin interpretar HTML', async () => {
+  const { formatChat } = await import('../src/chatFormat.js')
+  const blocks = formatChat('Para este fin de semana:\n\n* **Concurso de Marinera**: sábado 28.\n* Precio S/ 35.00\n\n<script>alert(1)</script>')
+  assert.equal(blocks[0].type, 'p')
+  assert.equal(blocks[1].type, 'ul')
+  assert.equal(blocks[1].items.length, 2)
+  assert.deepEqual(blocks[1].items[0][0], { text: 'Concurso de Marinera', bold: true })
+  assert.equal(blocks[2].parts[0].text, '<script>alert(1)</script>')
+})
