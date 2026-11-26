@@ -330,7 +330,7 @@ watch(organizerView, async (view) => {
 function resetEventForm() { Object.assign(eventForm, { eventoId: 0, categoriaId: '', nombre: '', descripcion: '', imagenUrl: '', fechaInicio: '', fechaFin: '', sede: '', direccion: '', departamento: 'Lima', provincia: 'Lima', distrito: '', aforoTotal: 50, precio: 0 }); eventBaseline.value = JSON.stringify(eventForm) }
 async function submitReview(eventId) {
   const draft = reviewDraft(eventId)
-  const result = await action(() => api.crearResena({ eventoId, calificacion: Number(draft.calificacion), comentario: draft.comentario }), 'Gracias por compartir tu reseña.')
+  const result = await action(() => api.crearResena({ eventoId: eventId, calificacion: Number(draft.calificacion), comentario: draft.comentario }), 'Gracias por compartir tu reseña.')
   if (result !== false) await loadReviews()
 }
 function reviewDraft(eventId) { return reviewDrafts[eventId] ||= { calificacion: 5, comentario: '' } }
